@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Comment System</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .auth-section, .comment-section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; }
+        .comment { border: 1px solid #eee; padding: 10px; margin: 10px 0; }
+        .reply { margin-left: 20px; border-left: 3px solid #007bff; }
+        .notification { background: #f8f9fa; padding: 10px; margin: 5px 0; border-left: 4px solid #007bff; }
+        input, textarea, button { margin: 5px; padding: 8px; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <h1>Real-time Comment System</h1>
+    
+    <!-- Authentication Section -->
+    <div id="auth-section" class="auth-section">
+        <h2>Login / Register</h2>
+        <div>
+            <input type="text" id="username" placeholder="Username">
+            <input type="email" id="email" placeholder="Email">
+            <input type="password" id="password" placeholder="Password">
+            <textarea id="bio" placeholder="Bio (optional)"></textarea>
+        </div>
+        <button onclick="register()">Register</button>
+        <button onclick="login()">Login</button>
+    </div>
+
+    <!-- Main App Section -->
+    <div id="app-section" class="hidden">
+        <div id="user-info"></div>
+        
+        <!-- Notifications -->
+        <div class="notification-section">
+            <h3>Notifications</h3>
+            <div id="notifications"></div>
+        </div>
+
+        <!-- Comment Form -->
+        <div class="comment-section">
+            <h3>Post a Comment</h3>
+            <textarea id="comment-content" placeholder="Write your comment..."></textarea>
+            <button onclick="postComment()">Post Comment</button>
+        </div>
+
+        <!-- Comments Display -->
+        <div id="comments-section">
+            <h3>Comments</h3>
+            <div id="comments"></div>
+        </div>
+    </div>
+
+    <script>
+        let token = '';
+        let socket = null;
+        let currentUser = null;
+
+        // Authentication functions
+        async function register() {
+            const username = document.getElementById('username').value;
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const bio = document.getElementById('bio').value;
+
+            try {
+                const response = await fetch('http://localhost:3000/auth/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, email, password, bio })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    token = data.access_token;
+                    currentUser = data.user;
+                    initializeApp();
+                } else {
+                    alert('Registration failed: ' + data.message);
+                }
+            } catch (error) {
+                alert('Registration error: ' + error.message);
+            }
+        }
+
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch('http://localhost:3000/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    token = data.access_token;
+                    currentUser = data.user;
+                    initializeApp();
+                } else {
+                    alert('Login failed: ' + data.message);
+                }
+            } catch (error) {
+                alert('Login error: ' + error.message);
+            }
+        }
+
+        function initializeApp() {
+            document.getElementById('auth-section').classList.add('hidden');
+            document.getElementById('app-section').classList.remove('hidden');
+            document.getElementById('user-info').innerHTML = `<h3>Welcome, ${currentUser.username}!</h3>`;
+            
+            // Initialize WebSocket
+            socket = io('http://localhost:3000', {
+                auth: { token: token }
+            });
+
+            // Socket event listeners
+            socket.on('new_comment', (comment) => {
+                addCommentToDOM(comment);
+                showNotification(`New comment by ${comment.author.username}`);
+            });
+
+            socket.on('comment_reply', (notification) => {
+                showNotification(notification.message);
+            });
+
+            socket.on('comment_like', (notification) => {
+                showNotification(notification.message);
+            });
+
+            socket.on('new_follower', (notification) => {
+                showNotification(notification.message);
+            });
+
+            socket.on('like_update', (data) => {
+                updateLikeCount(data.commentId, data.likesCount);
+            });
+
+            loadComments();
+        }
+
+        async function postComment() {
+            const content = document.getElementById('comment-content').value;
+            if (!content.trim()) return;
+
+            try {
+                const response = await fetch('http://localhost:3000/comments', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ content })
+                });
+
+                if (response.ok) {
+                    document.getElementById('comment-content').value = '';
+                    loadComments();
+                }
+            } catch (error) {
+                alert('Error posting comment: ' + error.message);
+            }
+        }
+
+        async function loadComments() {
+            try {
+                const response = await fetch('http://localhost:3000/comments', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const comments = await response.json();
+                displayComments(comments);
+            } catch (error) {
+                console.error('Error loading comments:', error);
+            }
+        }
+
+        function displayComments(comments) {
+            const commentsDiv = document.getElementById('comments');
+            commentsDiv.innerHTML = '';
+
+            comments.forEach(comment => {
+                addCommentToDOM(comment);
+            });
+        }
+
+        function addCommentToDOM(comment) {
+            const commentsDiv = document.getElementById('comments');
+            const commentDiv = document.createElement('div');
+            commentDiv.className = 'comment';
+            commentDiv.innerHTML = `
+                <strong>${comment.author.username}</strong>
+                <p>${comment.content}</p>
+                <small>${new Date(comment.createdAt).toLocaleString()}</small>
+                <button onclick="likeComment('${comment._id}')">Like (${comment.likesCount})</button>
+                <button onclick="replyToComment('${comment._id}')">Reply</button>
+                <div id="replies-${comment._id}">
+                    ${comment.replies ? comment.replies.map(reply => `
+                        <div class="reply">
+                            <strong>${reply.author.username}</strong>
+                            <p>${reply.content}</p>
+                            <small>${new Date(reply.createdAt).toLocaleString()}</small>
+                            <button onclick="likeComment('${reply._id}')">Like (${reply.likesCount})</button>
+                        </div>
+                    `).join('') : ''}
+                </div>
+            `;
+            commentsDiv.appendChild(commentDiv);
+        }
+
+        async function likeComment(commentId) {
+            try {
+                const response = await fetch(`http://localhost:3000/comments/${commentId}/like`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    updateLikeCount(commentId, result.likesCount);
+                }
+            } catch (error) {
+                console.error('Error liking comment:', error);
+            }
+        }
+
+        function replyToComment(commentId) {
+            const content = prompt('Enter your reply:');
+            if (!content) return;
+
+            fetch('http://localhost:3000/comments', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ content, parentComment: commentId })
+            }).then(() => {
+                loadComments();
+            });
+        }
+
+        function updateLikeCount(commentId, count) {
+            const buttons = document.querySelectorAll('button');
+            buttons.forEach(button => {
+                if (button.onclick && button.onclick.toString().includes(commentId)) {
+                    button.textContent = `Like (${count})`;
+                }
+            });
+        }
+
+        function showNotification(message) {
+            const notificationsDiv = document.getElementById('notifications');
+            const notificationDiv = document.createElement('div');
+            notificationDiv.className = 'notification';
+            notificationDiv.textContent = message;
+            notificationsDiv.appendChild(notificationDiv);
+
+            // Remove notification after 5 seconds
+            setTimeout(() => {
+                notificationDiv.remove();
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
