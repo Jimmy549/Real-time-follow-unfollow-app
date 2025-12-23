@@ -13,7 +13,8 @@ async function bootstrap() {
       'http://localhost:3000', 
       'http://localhost:3001', 
       'http://localhost:3002',
-      'https://your-vercel-app.vercel.app' // Replace with your Vercel URL
+      'https://real-time-follow-unfollow-app.vercel.app',
+      /\.vercel\.app$/
     ],
     credentials: true,
   });
