@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Real-time comment system with Socket.IO and MongoDB",
   "scripts": {
-    "build": "npx nest build",
+    "build": "npm install --include=dev && npx @nestjs/cli build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "dev": "nest start --watch",
@@ -20,7 +20,6 @@
     "@nestjs/passport": "^10.0.1",
     "@nestjs/websockets": "^10.0.0",
     "@nestjs/platform-socket.io": "^10.0.0",
-    "@nestjs/cli": "^10.0.0",
     "mongoose": "^7.5.0",
     "passport": "^0.6.0",
     "passport-jwt": "^4.0.1",
