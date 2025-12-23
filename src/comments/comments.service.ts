@@ -68,7 +68,7 @@ export class CommentsService {
           _id: reply._id,
           content: reply.content,
           author: reply.author,
-          createdAt: reply.createdAt,
+          createdAt: (reply as any).createdAt,
           likes: reply.likes || [],
           likesCount: reply.likesCount || 0
         }));
