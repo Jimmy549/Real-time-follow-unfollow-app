@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Real-time comment system with Socket.IO and MongoDB",
   "scripts": {
-    "build": "nest build",
+    "build": "npx nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "dev": "nest start --watch",
